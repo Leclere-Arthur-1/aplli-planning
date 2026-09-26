@@ -11,6 +11,12 @@ Application React reliée au schéma `supabase_tournees.sql`. Cette première é
 
 Ne jamais enregistrer une clé `secret` ou `service_role` dans ce projet. La clé publishable est destinée au navigateur ; les politiques RLS du schéma limitent chaque utilisateur à ses propres données.
 
+## Mise en ligne gratuite
+
+Le dépôt public est prévu pour GitHub Pages à l'adresse `https://leclere-arthur-1.github.io/aplli-planning/`. Dans **Settings → Pages → Build and deployment → Source**, sélectionner **GitHub Actions**. Le workflow `.github/workflows/pages.yml` construit et publie l'application à chaque modification de `main`. Le fichier `.env.production` ne contient que l'URL et la clé **publishable** du projet ; ne jamais y mettre une clé secrète.
+
+Dans Supabase, ouvrir **Authentication → URL Configuration** et définir **Site URL** sur l'adresse GitHub Pages ci-dessus. Ajouter éventuellement `http://localhost:5173/**` aux **Redirect URLs** pour les essais locaux. La confirmation par e-mail pourra ainsi revenir vers le site publié.
+
 ## Import
 
 Utiliser l'onglet `Clients` du modèle fourni. La ligne d'exemple commençant par `EXEMPLE-` est ignorée. Un import ultérieur met à jour les clients portant le même identifiant. Le fichier est lu dans le navigateur, et seuls les enregistrements validés sont envoyés à Supabase. Les colonnes latitude/longitude ne sont pas encore produites par l'import.
