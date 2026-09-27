@@ -19,7 +19,7 @@ Dans Supabase, ouvrir **Authentication → URL Configuration** et définir **Sit
 
 ## Import
 
-Utiliser l'onglet `Clients` du modèle fourni. La ligne d'exemple commençant par `EXEMPLE-` est ignorée. Un import ultérieur met à jour les clients portant le même identifiant. Le fichier est lu dans le navigateur, et seuls les enregistrements validés sont envoyés à Supabase. Les colonnes latitude/longitude ne sont pas encore produites par l'import.
+Utiliser l'onglet `Clients` du modèle fourni. La ligne d'exemple marquée `EXEMPLE FICTIF` est ignorée. Les mois visités portent `Oui` ; les autres restent vides. Les jours exclus et les créneaux horaires sont facultatifs. L'application reconnaît un client par son nom et son code postal, génère un identifiant interne automatiquement et met à jour les clients correspondants lors des imports suivants. Éviter deux clients de même nom dans le même code postal. En cas de changement du nom ou du code postal, corriger l'ancien client avant un nouvel import pour éviter un doublon. Le fichier est lu dans le navigateur, et seuls les enregistrements validés sont envoyés à Supabase. Les coordonnées latitude/longitude ne sont pas encore produites par l'import.
 
 ## Limites de cette étape
 

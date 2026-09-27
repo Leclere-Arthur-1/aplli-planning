@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {supabase,configured} from './supabase';
-import {parseClients} from './importExcel';
+import {parseClients,clientKey} from './importExcel';
 import './style.css';
 
 const monthLabels=['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
@@ -56,7 +56,7 @@ function Auth(){
 
 function Clients({clients,onImport}){
   const [query,setQuery]=useState('');
-  const filtered=useMemo(()=>clients.filter(c=>`${c.name} ${c.external_id} ${c.city}`.toLocaleLowerCase('fr').includes(query.toLocaleLowerCase('fr'))),[clients,query]);
+  const filtered=useMemo(()=>clients.filter(c=>`${c.name} ${c.city}`.toLocaleLowerCase('fr').includes(query.toLocaleLowerCase('fr'))),[clients,query]);
   return <><header className="page-head"><div><div className="eyebrow">RÉPERTOIRE</div><h1>Clients</h1><p>Retrouve les adresses et les règles de passage de tes clients.</p></div><button className="primary" onClick={onImport}>＋ Importer un Excel</button></header>
     <div className="stats"><div><strong>{clients.length}</strong><span>clients enregistrés</span></div><div><strong>{clients.filter(c=>c.active_months?.length).length}</strong><span>avec des mois de visite</span></div><div><strong>{clients.filter(c=>c.allowed_days?.length||c.fixed_start_time||c.window_start).length}</strong><span>avec des contraintes</span></div></div>
     <section className="panel"><div className="table-top"><h2>Liste des clients</h2><input aria-label="Rechercher un client" value={query} onChange={e=>setQuery(e.target.value)} placeholder="⌕  Rechercher un nom, une ville…"/></div>
@@ -68,12 +68,16 @@ function Import({user,onSaved,setError,setNotice}){
   const [rows,setRows]=useState([]),[fileName,setFileName]=useState(''),[busy,setBusy]=useState(false);
   async function fileChanged(e){setError('');setRows([]);const file=e.target.files?.[0];if(!file)return;setFileName(file.name);try{setRows(await parseClients(file))}catch(err){setError(err.message)}}
   async function save(){setBusy(true);setError('');try{
-    for(let i=0;i<rows.length;i+=100){const batch=rows.slice(i,i+100).map(r=>({...r,user_id:user.id}));const {error}=await supabase.from('clients').upsert(batch,{onConflict:'user_id,external_id'});if(error)throw error}
+    const {data:existing,error:readError}=await supabase.from('clients').select('name,postal_code,external_id').eq('user_id',user.id);
+    if(readError)throw readError;
+    const known=new Map();
+    for(const item of existing??[]){const key=clientKey(item.name,item.postal_code);if(known.has(key))throw new Error(`Plusieurs clients existants ont le même nom et code postal (${item.name}). Corrige les doublons avant l’import.`);known.set(key,item.external_id)}
+    for(let i=0;i<rows.length;i+=100){const batch=rows.slice(i,i+100).map(r=>({...r,external_id:known.get(clientKey(r.name,r.postal_code))??`auto:${clientKey(r.name,r.postal_code)}`,user_id:user.id}));const {error}=await supabase.from('clients').upsert(batch,{onConflict:'user_id,external_id'});if(error)throw error}
     setNotice(`${rows.length} clients importés ou mis à jour.`);await onSaved();
   }catch(err){setError(`Import interrompu : ${err.message}. Certains lots ont peut-être été enregistrés ; tu peux relancer l’import sans créer de doublons.`)}finally{setBusy(false)}}
   return <><header className="page-head"><div><div className="eyebrow">DONNÉES CLIENTS</div><h1>Importer un Excel</h1><p>Ajoute tes clients à partir du modèle préparé ensemble.</p></div><a className="download" href={`${import.meta.env.BASE_URL}Modele_clients_tournees.xlsx`} download>Télécharger le modèle ↓</a></header>
     <section className="panel import-panel"><div className="step">01 <span>CHOISIR LE FICHIER</span></div><label className="dropzone"><span className="upload-icon">⇧</span><strong>{fileName||'Clique ici pour sélectionner ton fichier'}</strong><small>Format .xlsx · onglet « Clients » du modèle</small><input type="file" accept=".xlsx" onChange={fileChanged}/></label>
-    <div className="step second">02 <span>VÉRIFIER ET IMPORTER</span></div>{rows.length?<><div className="preview-note"><strong>{rows.length} clients prêts à importer</strong><span>La ligne d’exemple est automatiquement ignorée. Un identifiant déjà connu met à jour ce client.</span></div><div className="table-scroll"><table><thead><tr><th>IDENTIFIANT</th><th>CLIENT</th><th>VILLE</th><th>VISITES / MOIS</th></tr></thead><tbody>{rows.slice(0,5).map(c=><tr key={c.external_id}><td>{c.external_id}</td><td>{c.name}</td><td>{c.city}</td><td>{c.visits_per_month}</td></tr>)}</tbody></table></div>{rows.length>5&&<p className="muted">… et {rows.length-5} autres clients.</p>}<button className="primary" disabled={busy} onClick={save}>{busy?'Import en cours…':`Importer ${rows.length} clients`}</button></>:<p className="muted">Ton fichier sera vérifié avant tout enregistrement.</p>}</section>
+    <div className="step second">02 <span>VÉRIFIER ET IMPORTER</span></div>{rows.length?<><div className="preview-note"><strong>{rows.length} clients prêts à importer</strong><span>La ligne d’exemple est ignorée. Un client portant le même nom et code postal est mis à jour.</span></div><div className="table-scroll"><table><thead><tr><th>CLIENT</th><th>VILLE</th><th>VISITES / MOIS</th></tr></thead><tbody>{rows.slice(0,5).map(c=><tr key={clientKey(c.name,c.postal_code)}><td>{c.name}</td><td>{c.city}</td><td>{c.visits_per_month}</td></tr>)}</tbody></table></div>{rows.length>5&&<p className="muted">… et {rows.length-5} autres clients.</p>}<button className="primary" disabled={busy} onClick={save}>{busy?'Import en cours…':`Importer ${rows.length} clients`}</button></>:<p className="muted">Ton fichier sera vérifié avant tout enregistrement.</p>}</section>
   </>;
 }
 
