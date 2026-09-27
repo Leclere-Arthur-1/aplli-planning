@@ -10,6 +10,7 @@ test('espace deux visites et exclut les vendredis',()=>{
   const result=generateMonthlyPlan([{...base,id:'A',name:'A'}],[],'2026-10',settings);
   assert.equal(result.total,2);
   assert.equal(result.unplanned,0);
+  assert.ok(result.visits.every(v=>!Object.hasOwn(v,'id')));
   assert.ok(result.visits.every(v=>weekday(v.scheduled_date)!==5));
   assert.ok(Math.abs(Number(result.visits[1].scheduled_date.slice(-2))-Number(result.visits[0].scheduled_date.slice(-2)))>=7);
 });
@@ -36,4 +37,11 @@ test('laisse à planifier un créneau trop court',()=>{
   const result=generateMonthlyPlan([client],[],'2026-10',settings);
   assert.equal(result.unplanned,1);
   assert.equal(result.visits[0].scheduled_date,null);
+});
+
+test('conserve l’identifiant d’une visite déjà enregistrée',()=>{
+  const client={...base,id:'A',name:'A',visits_per_month:1};
+  const existing=[{id:'existing',client_id:'A',occurrence:1,status:'planned',scheduled_date:'2026-10-01',is_locked:false}];
+  const result=generateMonthlyPlan([client],existing,'2026-10',settings);
+  assert.equal(result.visits[0].id,'existing');
 });

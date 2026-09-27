@@ -75,7 +75,7 @@ export function generateMonthlyPlan(clients,existing,month,settings={}){
     });
     const selected=choices[0];
     if(selected){selected.visits.push({client,duration_minutes:client.visit_minutes,window_start:client.window_start,window_end:client.window_end});selected.minutes+=client.visit_minutes;e.assignedDate=selected.date}
-    output.push({id:e.previous?.id,user_id:client.user_id,client_id:client.id,due_month,occurrence:e.occurrence,scheduled_date:selected?.date??null,scheduled_start:null,duration_minutes:client.visit_minutes,route_order:null,status:selected?'planned':'to_plan',is_locked:false,notes:e.previous?.notes??null});
+    output.push({...(e.previous?.id?{id:e.previous.id}:{}),user_id:client.user_id,client_id:client.id,due_month,occurrence:e.occurrence,scheduled_date:selected?.date??null,scheduled_start:null,duration_minutes:client.visit_minutes,route_order:null,status:selected?'planned':'to_plan',is_locked:false,notes:e.previous?.notes??null});
   }
   return {visits:output,days,unplanned:output.filter(v=>!v.scheduled_date).length,preserved:preserved.length,total:entries.length,inactiveExisting:existing.filter(v=>!byClient.has(v.client_id)).length};
 }

@@ -16,7 +16,8 @@ export default function Planning({user,clients,settings,setError,setNotice,onVis
   async function generate(){setError('');setBusy(true);try{
     if(!due.length)throw new Error('Aucun client à visiter pendant ce mois. Vérifie les mois cochés dans ton Excel.');
     const result=generateMonthlyPlan(clients,visits,month,settings??{});
-    for(let i=0;i<result.visits.length;i+=100){const {error}=await supabase.from('visits').upsert(result.visits.slice(i,i+100),{onConflict:'user_id,client_id,due_month,occurrence'});if(error)throw error}
+    const newVisits=result.visits.filter(v=>!v.id),existingVisits=result.visits.filter(v=>v.id);
+    for(const rows of [newVisits,existingVisits])for(let i=0;i<rows.length;i+=100){const {error}=await supabase.from('visits').upsert(rows.slice(i,i+100),{onConflict:'user_id,client_id,due_month,occurrence'});if(error)throw error}
     await load();await onVisitsChanged();
     setNotice(`${result.total} visites dues : ${result.visits.filter(v=>v.scheduled_date).length} nouvelles visites datées, ${result.unplanned} à planifier. ${result.preserved} visite(s) verrouillée(s) ou terminée(s) conservée(s).`);
   }catch(err){setError(err.message)}finally{setBusy(false)}}
