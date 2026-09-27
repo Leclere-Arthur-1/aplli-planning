@@ -1,6 +1,6 @@
-# Mes tournées clients — première version
+# Mes tournées clients
 
-Application React reliée au schéma `supabase_tournees.sql`. Cette première étape comprend l'authentification, l'import du classeur Excel, la recherche des clients et les paramètres de travail. Le planning, la carte et l'optimisation des trajets sont les étapes suivantes.
+Application React reliée au schéma `supabase/schema.sql`. Elle comprend l'authentification, l'import du classeur Excel, la recherche des clients, les paramètres, le planning mensuel et une carte des visites.
 
 ## Démarrage local
 
@@ -23,4 +23,8 @@ Utiliser l'onglet `Clients` du modèle fourni. La ligne d'exemple marquée `EXEM
 
 ## Limites de cette étape
 
-Le planning automatique et la carte ne sont pas encore disponibles. Les dates de visite ne sont donc pas encore calculées ; la recherche porte sur le nom, l'identifiant et la ville. La géolocalisation des adresses nécessitera un contrôle de qualité avant de servir aux tournées.
+Le bouton de génération répartit les passages selon les jours travaillés, jours exclus, créneaux compatibles et la durée cible passée chez les clients. Les passages sont espacés dans le mois. Les visites verrouillées, effectuées et annulées sont conservées lors du recalcul ; les autres peuvent changer de date. Une visite qui ne tient pas dans les contraintes reste « À planifier ». Déplacer une visite manuellement la verrouille.
+
+La proximité se base sur les coordonnées enregistrées quand elles ont été vérifiées, sinon sur le code postal et la ville. Le bouton « Localiser » de la carte envoie **à la demande seulement** les adresses françaises sans coordonnées au service public IGN Géoplateforme, puis conserve le résultat dans Supabase. Il faut vérifier les positions signalées comme approximatives. La carte utilise des tuiles OpenStreetMap avec attribution visible.
+
+Les dates proposées sont des **brouillons à vérifier** : ni les durées routières réelles ni l'heure exacte de chaque rendez-vous ne sont encore calculées. Le champ « trajet maximum souhaité » des paramètres n'est donc pas encore appliqué. Les créneaux sont testés par rapport au temps d'intervention dans la journée, mais les trajets et l'ordre de visite réclament une étape de routage supplémentaire. Ne pas considérer les dates générées comme des rendez-vous confirmés auprès des clients.

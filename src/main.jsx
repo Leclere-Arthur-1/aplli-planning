@@ -2,6 +2,8 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {supabase,configured} from './supabase';
 import {parseClients,clientKey} from './importExcel';
+import Planning from './Planning';
+import MapView from './MapView';
 import './style.css';
 
 const monthLabels=['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Aoû','Sep','Oct','Nov','Déc'];
@@ -9,7 +11,7 @@ const dayLabels=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 
 function App(){
   const [session,setSession]=useState(null),[loading,setLoading]=useState(true);
-  const [tab,setTab]=useState('clients'),[clients,setClients]=useState([]),[settings,setSettings]=useState(null);
+  const [tab,setTab]=useState('planning'),[clients,setClients]=useState([]),[settings,setSettings]=useState(null),[upcoming,setUpcoming]=useState([]);
   const [notice,setNotice]=useState(''),[error,setError]=useState('');
   useEffect(()=>{
     if(!supabase){setLoading(false);return}
@@ -19,12 +21,14 @@ function App(){
   },[]);
   async function refresh(){
     if(!session)return;
-    const [a,b]=await Promise.all([
+    const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Paris'});
+    const [a,b,c]=await Promise.all([
       supabase.from('clients').select('*').order('name'),
-      supabase.from('user_settings').select('*').eq('user_id',session.user.id).maybeSingle()
+      supabase.from('user_settings').select('*').eq('user_id',session.user.id).maybeSingle(),
+      supabase.from('visits').select('client_id,scheduled_date,status').gte('scheduled_date',today).eq('status','planned').order('scheduled_date').limit(1000)
     ]);
-    if(a.error||b.error)setError(a.error?.message||b.error?.message);
-    else {setClients(a.data??[]);setSettings(b.data)}
+    if(a.error||b.error||c.error)setError(a.error?.message||b.error?.message||c.error?.message);
+    else {setClients(a.data??[]);setSettings(b.data);setUpcoming(c.data??[])}
   }
   useEffect(()=>{refresh()},[session?.user?.id]);
   if(!configured)return <main className="center"><div className="panel"><h1>Configuration nécessaire</h1><p>Copie <code>.env.example</code> vers <code>.env.local</code> et renseigne l’adresse et la clé publique de ton projet Supabase.</p></div></main>;
@@ -32,13 +36,15 @@ function App(){
   if(!session)return <Auth/>;
   return <div className="app">
     <aside className="sidebar"><div className="brand"><span className="brand-icon">◈</span><span>Mes tournées<small>Planification clients</small></span></div>
-      <nav>{[['clients','Clients','◎'],['import','Import Excel','⇧'],['settings','Paramètres','⚙']].map(([id,label,icon])=><button key={id} className={tab===id?'active':''} onClick={()=>{setTab(id);setError('');setNotice('')}}><span>{icon}</span>{label}</button>)}</nav>
+      <nav>{[['planning','Planning','▦'],['map','Carte','◉'],['clients','Clients','◎'],['import','Import Excel','⇧'],['settings','Paramètres','⚙']].map(([id,label,icon])=><button key={id} className={tab===id?'active':''} onClick={()=>{setTab(id);setError('');setNotice('')}}><span>{icon}</span>{label}</button>)}</nav>
       <div className="sidebar-bottom"><span className="account">{session.user.email}</span><button className="logout" onClick={()=>supabase.auth.signOut()}>Se déconnecter ↗</button></div>
     </aside>
     <main className="content"><div className="topline"><span>ESPACE DE TRAVAIL</span><span className="pill">Projet personnel</span></div>
       {error&&<div className="alert error" role="alert">{error}<button onClick={()=>setError('')}>×</button></div>}
       {notice&&<div className="alert success" role="status">{notice}<button onClick={()=>setNotice('')}>×</button></div>}
-      {tab==='clients'&&<Clients clients={clients} onImport={()=>setTab('import')}/>}
+      {tab==='planning'&&<Planning user={session.user} clients={clients} settings={settings} setError={setError} setNotice={setNotice} onVisitsChanged={refresh}/>}
+      {tab==='map'&&<MapView user={session.user} clients={clients} settings={settings} setError={setError} setNotice={setNotice} onChanged={refresh}/>}
+      {tab==='clients'&&<Clients clients={clients} upcoming={upcoming} onImport={()=>setTab('import')}/>}
       {tab==='import'&&<Import user={session.user} onSaved={async()=>{await refresh();setTab('clients')}} setError={setError} setNotice={setNotice}/>}
       {tab==='settings'&&<Settings user={session.user} saved={settings} onSaved={refresh} setError={setError} setNotice={setNotice}/>}
     </main>
@@ -54,13 +60,14 @@ function Auth(){
   return <main className="center auth-bg"><form className="auth-card" onSubmit={submit}><div className="auth-logo">◈</div><h1>{mode==='login'?'Bon retour':'Créer mon compte'}</h1><p>Ton planning clients au même endroit.</p><label>Adresse e-mail<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="vous@exemple.fr"/></label><label>Mot de passe<input type="password" required minLength={6} value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••"/></label>{message&&<div className="auth-message">{message}</div>}<button className="primary" disabled={pending}>{pending?'Un instant…':mode==='login'?'Se connecter':'Créer mon compte'}</button><button type="button" className="text-button" onClick={()=>{setMode(mode==='login'?'signup':'login');setMessage('')}}>{mode==='login'?'Créer un compte':'J’ai déjà un compte'}</button></form></main>
 }
 
-function Clients({clients,onImport}){
+function Clients({clients,upcoming,onImport}){
   const [query,setQuery]=useState('');
   const filtered=useMemo(()=>clients.filter(c=>`${c.name} ${c.city}`.toLocaleLowerCase('fr').includes(query.toLocaleLowerCase('fr'))),[clients,query]);
+  const nextByClient=useMemo(()=>new Map([...upcoming].reverse().map(v=>[v.client_id,v.scheduled_date])),[upcoming]);
   return <><header className="page-head"><div><div className="eyebrow">RÉPERTOIRE</div><h1>Clients</h1><p>Retrouve les adresses et les règles de passage de tes clients.</p></div><button className="primary" onClick={onImport}>＋ Importer un Excel</button></header>
-    <div className="stats"><div><strong>{clients.length}</strong><span>clients enregistrés</span></div><div><strong>{clients.filter(c=>c.active_months?.length).length}</strong><span>avec des mois de visite</span></div><div><strong>{clients.filter(c=>c.allowed_days?.length||c.fixed_start_time||c.window_start).length}</strong><span>avec des contraintes</span></div></div>
+    <div className="stats"><div><strong>{clients.length}</strong><span>clients enregistrés</span></div><div><strong>{clients.filter(c=>c.active_months?.length).length}</strong><span>avec des mois de visite</span></div><div><strong>{clients.filter(c=>c.excluded_days?.length||c.window_start).length}</strong><span>avec des contraintes</span></div></div>
     <section className="panel"><div className="table-top"><h2>Liste des clients</h2><input aria-label="Rechercher un client" value={query} onChange={e=>setQuery(e.target.value)} placeholder="⌕  Rechercher un nom, une ville…"/></div>
-      {!clients.length?<div className="empty"><div className="empty-icon">▦</div><h3>Ta liste est encore vide</h3><p>Importe ton fichier Excel pour voir tous tes clients ici.</p><button onClick={onImport}>Importer un fichier →</button></div>:<div className="table-scroll"><table><thead><tr><th>CLIENT</th><th>VILLE</th><th>PASSAGES</th><th>DURÉE</th><th>MOIS</th></tr></thead><tbody>{filtered.map(c=><tr key={c.id}><td><strong>{c.name}</strong><small>{c.street_address} · {c.postal_code}</small></td><td>{c.city}</td><td>{c.visits_per_month} / mois</td><td>{c.visit_minutes} min</td><td><span className="month-count">{c.active_months?.length??0} mois</span></td></tr>)}</tbody></table>{!filtered.length&&<p className="no-results">Aucun client trouvé.</p>}</div>}
+      {!clients.length?<div className="empty"><div className="empty-icon">▦</div><h3>Ta liste est encore vide</h3><p>Importe ton fichier Excel pour voir tous tes clients ici.</p><button onClick={onImport}>Importer un fichier →</button></div>:<div className="table-scroll"><table><thead><tr><th>CLIENT</th><th>VILLE</th><th>PASSAGES</th><th>DURÉE</th><th>MOIS</th><th>PROCHAINE VISITE</th></tr></thead><tbody>{filtered.map(c=><tr key={c.id}><td><strong>{c.name}</strong><small>{c.street_address} · {c.postal_code}</small></td><td>{c.city}</td><td>{c.visits_per_month} / mois</td><td>{c.visit_minutes} min</td><td><span className="month-count">{c.active_months?.length??0} mois</span></td><td>{nextByClient.get(c.id)?new Date(`${nextByClient.get(c.id)}T12:00:00Z`).toLocaleDateString('fr-FR',{timeZone:'UTC'}):'À planifier'}</td></tr>)}</tbody></table>{!filtered.length&&<p className="no-results">Aucun client trouvé.</p>}</div>}
     </section></>;
 }
 
